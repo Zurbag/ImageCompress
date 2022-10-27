@@ -10,7 +10,7 @@
     </parent>
 
     <groupId>org.example</groupId>
-    <artifactId>DisaJSONv1</artifactId>
+    <artifactId>CompressorImages</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>Compress-more-images</name>
     <description>Compress image to server</description>

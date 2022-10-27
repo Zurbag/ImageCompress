@@ -1,2 +1,2 @@
-C:\_archive\
-0.3f
+\\192.168.15.125\_testcompress
+0.25f

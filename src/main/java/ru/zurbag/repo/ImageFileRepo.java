@@ -9,4 +9,5 @@ public interface ImageFileRepo extends CrudRepository<ImageFile, Long> {
     ImageFile getByName(String name);
 
     List<ImageFile> getByIsCompressed(Boolean b);
+    List<ImageFile> findFirst200000ByIsCompressed(Boolean b);
 }

@@ -15,13 +15,15 @@ import javax.imageio.stream.ImageOutputStream;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 @SpringBootApplication
 public class App {
-    public static void main(String[] args) {
+
+
+    public static void main(String[] args) throws InterruptedException {
         ConfigurableApplicationContext context = SpringApplication.run(App.class);
         ImageFileRepo imageFileRepo = context.getBean(ImageFileRepo.class);
 
@@ -35,12 +37,12 @@ public class App {
 
         System.out.println(helloText);
         int action = 0;
-        while (true){
+        while (true) {
             System.out.print("Введите число: ");
 
             try {
                 action = console.nextInt();
-            }catch (Exception e){
+            } catch (Exception e) {
                 System.out.println("Кисо, куку, ты головой уебался? Я прошу ввести число!!! Ты точно айтишник?");
             }
 
@@ -62,21 +64,52 @@ public class App {
             }
             if (action == 2) {
                 System.out.println("Запущено сжатие фалов");
-                List<ImageFile> filesFromDb = imageFileRepo.getByIsCompressed(false);
+                long startTime = System.currentTimeMillis();
+                System.out.println(LocalDateTime.now());
+                List<ImageFile> filesFromDb = imageFileRepo.findFirst200000ByIsCompressed(false);
+                System.out.println(filesFromDb.size());
 
-                AtomicReference<Integer> countFiles = new AtomicReference<>(filesFromDb.size());
-                filesFromDb.stream().forEach(imageFile -> {
-                    try {
-                        System.out.println(" Файл: " + countFiles.getAndSet(countFiles.get() - 1) + " " + imageFile.getPath());
-                        compress(new File(imageFile.getPath()));
+                int size = filesFromDb.size() / 3;
+                int th1Start = 0;
+                int th1Stop = th1Start+size;
+                int th2Start = th1Stop + 1;
+                int th2Stop = th2Start+size;
+                int th3Start = th2Stop + 1;
+                int th3Stop = filesFromDb.size();
 
-                        //TODO вытаскиваю файл из базы данных ставлю флаг распознано
-                        imageFile.setIsCompressed(true);
-                        imageFileRepo.save(imageFile);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+                Thread thread1 = createThread(imageFileRepo, th1Start, th1Stop, filesFromDb, "Thread - 1");
+                Thread thread2 = createThread(imageFileRepo, th2Start, th2Stop, filesFromDb, "Thread - 2");
+                Thread thread3 = createThread(imageFileRepo, th3Start, th3Stop, filesFromDb, "Thread - 3");
+
+                thread1.start();
+                thread2.start();
+                thread3.start();
+                thread1.join();
+                thread2.join();
+                thread3.join();
+
+                //TODO аккуратнее рабочий код
+//                AtomicReference<Integer> countFiles = new AtomicReference<>(filesFromDb.size());
+//                filesFromDb.stream().forEach(imageFile -> {
+//                    try {
+//                        System.out.println(" Файл: " + countFiles.getAndSet(countFiles.get() - 1) + " " + imageFile.getPath());
+//                        try {
+//                            compress(new File(imageFile.getPath()));
+//                        } catch (Exception e) {
+//                            System.out.println(e);
+//                            System.out.println("Вообще пофиг 1 файл погоды не делает");
+//                        }
+//
+//                        imageFile.setIsCompressed(true);
+//                        imageFileRepo.save(imageFile);
+//                    } catch (Exception e) {
+//                        throw new RuntimeException(e);
+//                    }
+//                });
+
+                long stopTime = System.currentTimeMillis();
+                System.out.println(LocalDateTime.now());
+                System.out.println((stopTime - startTime) / 1000 + " секунд");
                 System.out.println("Cжатие файлов завершено");
                 System.out.println("-----------------------");
 
@@ -89,7 +122,6 @@ public class App {
         }
 
     }
-
 
     private static Collection<File> getFilesFromServer(String path) {
         return FileUtils.listFiles(new File(path), new String[]{"jpg"}, true);
@@ -110,6 +142,30 @@ public class App {
         scanner.close();
         return paths;
     }
+
+
+    public static Thread createThread(ImageFileRepo imageFileRepo, int start, int stop, List<ImageFile> filesFromDb, String threadName) {
+        Thread thread = new Thread(() -> {
+            for (int i = start; i < stop; i++) {
+                try {
+                    try {
+                        System.out.println(threadName+" - "+filesFromDb.get(i).getId() + " - " + filesFromDb.get(i).getPath());
+                        compress(new File(filesFromDb.get(i).getPath()));
+                    } catch (Exception e) {
+                        System.out.println(e);
+                        System.out.println("Вообще пофиг 1 файл погоды не делает");
+                    }
+
+                    filesFromDb.get(i).setIsCompressed(true);
+                    imageFileRepo.save(filesFromDb.get(i));
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        return thread;
+    }
+
 
     public static void compress(File input) throws IOException {
         BufferedImage image = resize(ImageIO.read(input));
